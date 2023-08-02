@@ -95,7 +95,6 @@ final class ReaderService: Loggable {
     func updatePassphrase(_ passphrase: String) {
       self.drmReaderServices.compactMap({ $0 as? LCPReaderService }).forEach { service in
         service.updatePassphrase(passphrase)
-        print("UPDATING PASSPHRASE TO: \(String(describing: passphrase))")
       }
 
       self.streamer = Streamer(

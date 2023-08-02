@@ -22,4 +22,6 @@ Pod::Spec.new do |s|
   s.dependency "R2Shared"
   s.dependency "R2Streamer"
   s.dependency "R2Navigator"
+  s.dependency "R2LCPClient"
+  s.dependency "ReadiumLCP"
 end

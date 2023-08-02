@@ -51,6 +51,8 @@ target 'ReadiumExample' do
   pod 'R2Shared', podspec: 'https://raw.githubusercontent.com/readium/swift-toolkit/develop/Support/CocoaPods/ReadiumShared.podspec'
   pod 'R2Streamer', podspec: 'https://raw.githubusercontent.com/readium/swift-toolkit/develop/Support/CocoaPods/ReadiumStreamer.podspec'
   pod 'R2Navigator', podspec: 'https://raw.githubusercontent.com/readium/swift-toolkit/develop/Support/CocoaPods/ReadiumNavigator.podspec'
+  pod 'ReadiumLCP', podspec: 'https://raw.githubusercontent.com/readium/swift-toolkit/develop/Support/CocoaPods/ReadiumLCP.podspec'
+  # pod 'R2LCPClient', podspec: 'LCP_URL'
   pod 'Minizip', modular_headers: true
 
   post_install do |installer|
@@ -61,5 +63,9 @@ target 'ReadiumExample' do
       :mac_catalyst_enabled => false
     )
     __apply_Xcode_12_5_M1_post_install_workaround(installer)
+
+    installer.pods_project.build_configurations.each do |config|
+      config.build_settings['OTHER_SWIFT_FLAGS'] ||= ['$(inherited)', '-D LCP']
+    end
   end
 end

@@ -6,11 +6,21 @@ import UIKit
 
 final class ReaderService: Loggable {
   var app: AppModule?
-  var streamer = Streamer()
+  var streamer: Streamer
   var publicationServer: PublicationServer?
+
+  private var drmReaderServices = [DRMReaderService]()
   private var subscriptions = Set<AnyCancellable>()
 
   init() {
+    #if LCP
+      self.drmReaderServices.append(LCPReaderService())
+    #endif
+
+    self.streamer = Streamer(
+      contentProtections: self.drmReaderServices.compactMap(\.contentProtection)
+    )
+
     do {
       self.app = try AppModule()
       self.publicationServer = PublicationServer()
@@ -19,7 +29,7 @@ final class ReaderService: Loggable {
       print(error)
     }
   }
-  
+
   static func locatorFromLocation(
     _ location: NSDictionary?,
     _ publication: Publication?
@@ -33,7 +43,7 @@ final class ReaderService: Loggable {
     let hasHashHref = (location!["href"] as! String).contains("#")
 
     // check that we're not dealing with a Link
-    if ((hasChildren || hasHashHref) && !hasLocations) {
+    if (hasChildren || hasHashHref) && !hasLocations {
       guard let publication = publication else {
         return nil
       }
@@ -45,7 +55,7 @@ final class ReaderService: Loggable {
     } else {
       return try? Locator(json: location)
     }
-    
+
     return nil
   }
 
@@ -58,7 +68,7 @@ final class ReaderService: Loggable {
   ) {
     guard let reader = self.app?.reader else { return }
     self.url(path: url)
-      .flatMap { self.openPublication(at: $0, allowUserInteraction: true, sender: sender ) }
+      .flatMap { self.openPublication(at: $0, allowUserInteraction: true, sender: sender) }
       .flatMap { (pub, _) in self.checkIsReadable(publication: pub) }
       .sink(
         receiveCompletion: { error in
@@ -73,13 +83,26 @@ final class ReaderService: Loggable {
             locator: locator
           )
 
-          if (vc != nil) {
+          if vc != nil {
             completion(vc!)
           }
         }
       )
       .store(in: &subscriptions)
   }
+
+  #if LCP
+    func updatePassphrase(_ passphrase: String) {
+      self.drmReaderServices.compactMap({ $0 as? LCPReaderService }).forEach { service in
+        service.updatePassphrase(passphrase)
+        print("UPDATING PASSPHRASE TO: \(String(describing: passphrase))")
+      }
+
+      self.streamer = Streamer(
+        contentProtections: self.drmReaderServices.compactMap(\.contentProtection)
+      )
+    }
+  #endif
 
   func url(path: String) -> AnyPublisher<URL, ReaderError> {
     // Absolute URL.
@@ -141,7 +164,7 @@ final class ReaderService: Loggable {
   }
 
   private func preparePresentation(of publication: Publication) {
-    if (self.publicationServer == nil) {
+    if self.publicationServer == nil {
       log(.error, "Whoops")
       return
     }

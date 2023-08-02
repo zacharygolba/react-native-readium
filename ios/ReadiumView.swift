@@ -1,31 +1,34 @@
 import Combine
 import Foundation
+import R2Navigator
 import R2Shared
 import R2Streamer
 import UIKit
-import R2Navigator
 
-
-class ReadiumView : UIView, Loggable {
+class ReadiumView: UIView, Loggable {
   var readerService: ReaderService = ReaderService()
   var readerViewController: ReaderViewController?
   var viewController: UIViewController? {
-    let viewController = sequence(first: self, next: { $0.next }).first(where: { $0 is UIViewController })
+    let viewController = sequence(first: self, next: { $0.next }).first(where: {
+      $0 is UIViewController
+    })
     return viewController as? UIViewController
   }
   private var subscriptions = Set<AnyCancellable>()
 
   @objc var file: NSDictionary? = nil {
     didSet {
-      let initialLocation = file?["initialLocation"] as? NSDictionary
-      if let url = file?["url"] as? String {
-        self.loadBook(url: url, location: initialLocation)
-      }
+      self.loadBookFromFile()
     }
   }
   @objc var location: NSDictionary? = nil {
     didSet {
       self.updateLocation()
+    }
+  }
+  @objc var passphrase: NSString? = nil {
+    didSet {
+      self.loadBookFromFile()
     }
   }
   @objc var settings: NSDictionary? = nil {
@@ -40,7 +43,15 @@ class ReadiumView : UIView, Loggable {
     url: String,
     location: NSDictionary?
   ) {
-    guard let rootViewController = UIApplication.shared.delegate?.window??.rootViewController else { return }
+    guard let rootViewController = UIApplication.shared.delegate?.window??.rootViewController else {
+      return
+    }
+
+    #if LCP
+      if let passphrase = self.passphrase as? String {
+        self.readerService.updatePassphrase(passphrase)
+      }
+    #endif
 
     self.readerService.buildViewController(
       url: url,
@@ -60,15 +71,15 @@ class ReadiumView : UIView, Loggable {
 
   func updateLocation() {
     guard let navigator = readerViewController?.navigator else {
-      return;
+      return
     }
     guard let locator = self.getLocator() else {
-      return;
+      return
     }
 
     let cur = navigator.currentLocation
-    if (cur != nil && locator.hashValue == cur?.hashValue) {
-      return;
+    if cur != nil && locator.hashValue == cur?.hashValue {
+      return
     }
 
     navigator.go(
@@ -79,9 +90,9 @@ class ReadiumView : UIView, Loggable {
 
   func updateUserSettings(_ settings: NSDictionary?) {
 
-    if (readerViewController == nil) {
+    if readerViewController == nil {
       // defer setting update as view isn't initialized yet
-      return;
+      return
     }
 
     if let navigator = readerViewController!.navigator as? EPUBNavigatorViewController {
@@ -90,7 +101,7 @@ class ReadiumView : UIView, Loggable {
       for property in userProperties.properties {
         let value = settings?[property.reference]
 
-        if (value == nil) {
+        if value == nil {
           continue
         }
 
@@ -140,7 +151,7 @@ class ReadiumView : UIView, Loggable {
     readerViewController = vc
 
     // if the controller was just instantiated then apply any existing settings
-    if (settings != nil) {
+    if settings != nil {
       self.updateUserSettings(settings)
     }
 
@@ -163,5 +174,12 @@ class ReadiumView : UIView, Loggable {
         return link.json
       })
     ])
+  }
+
+  private func loadBookFromFile() {
+    let initialLocation = self.file?["initialLocation"] as? NSDictionary
+    if let url = self.file?["url"] as? String {
+      self.loadBook(url: url, location: initialLocation)
+    }
   }
 }

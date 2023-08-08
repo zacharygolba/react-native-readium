@@ -2,10 +2,11 @@ package com.reactnativereadium
 
 import com.facebook.react.bridge.*
 import com.facebook.react.common.MapBuilder
-import com.facebook.react.uimanager.annotations.ReactProp
-import com.facebook.react.uimanager.annotations.ReactPropGroup
 import com.facebook.react.uimanager.ThemedReactContext
 import com.facebook.react.uimanager.ViewGroupManager
+import com.facebook.react.uimanager.annotations.ReactProp
+import com.facebook.react.uimanager.annotations.ReactPropGroup
+import com.facebook.react.util.RNLog
 import com.reactnativereadium.reader.ReaderService
 import com.reactnativereadium.utils.File
 import com.reactnativereadium.utils.LinkOrLocator
@@ -14,10 +15,9 @@ import org.json.JSONObject
 import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Locator
 
-class ReadiumViewManager(
-  val reactContext: ReactApplicationContext
-) : ViewGroupManager<ReadiumView>() {
-  private var svc = ReaderService(reactContext)
+class ReadiumViewManager(val reactContext: ReactApplicationContext) :
+    ViewGroupManager<ReadiumView>() {
+  private val svc = ReaderService(reactContext)
 
   override fun getName() = "ReadiumView"
 
@@ -27,21 +27,15 @@ class ReadiumViewManager(
 
   override fun getExportedCustomBubblingEventTypeConstants(): Map<String, Any> {
     return MapBuilder.builder<String, Any>()
-      .put(
-        ON_LOCATION_CHANGE,
-        MapBuilder.of(
-          "phasedRegistrationNames",
-          MapBuilder.of("bubbled", ON_LOCATION_CHANGE)
+        .put(
+            ON_LOCATION_CHANGE,
+            MapBuilder.of("phasedRegistrationNames", MapBuilder.of("bubbled", ON_LOCATION_CHANGE))
         )
-      )
-      .put(
-        ON_TABLE_OF_CONTENTS,
-        MapBuilder.of(
-          "phasedRegistrationNames",
-          MapBuilder.of("bubbled", ON_TABLE_OF_CONTENTS)
+        .put(
+            ON_TABLE_OF_CONTENTS,
+            MapBuilder.of("phasedRegistrationNames", MapBuilder.of("bubbled", ON_TABLE_OF_CONTENTS))
         )
-      )
-      .build()
+        .build()
   }
 
   override fun getCommandsMap(): MutableMap<String, Int> {
@@ -61,15 +55,13 @@ class ReadiumViewManager(
           buildForViewIfReady(view)
         }
       }
-      else -> {
-      }
+      else -> {}
     }
   }
 
   @ReactProp(name = "file")
   fun setFile(view: ReadiumView, file: ReadableMap) {
-    val path = (file.getString("url") ?: "")
-      .replace("^(file:/+)?(/.*)$".toRegex(), "$2")
+    val path = (file.getString("url") ?: "").replace("^(file:/+)?(/.*)$".toRegex(), "$2")
     val location = file.getMap("initialLocation")
     var initialLocation: LinkOrLocator? = null
 
@@ -100,7 +92,7 @@ class ReadiumViewManager(
       }
     }
 
-    return linkOrLocator;
+    return linkOrLocator
   }
 
   @ReactProp(name = "location")
@@ -110,6 +102,13 @@ class ReadiumViewManager(
     if (linkOrLocator != null) {
       view.updateLocation(linkOrLocator)
     }
+  }
+
+  @ReactProp(name = "passphrase")
+  fun setPassphrase(view: ReadiumView, passphrase: String?) {
+    view.passphrase = passphrase
+    svc.updatePassphrase(passphrase)
+    this.buildForViewIfReady(view)
   }
 
   @ReactProp(name = "settings")

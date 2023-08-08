@@ -20,6 +20,7 @@ class ReadiumView(
   var dimensions: Dimensions = Dimensions(0,0)
   var file: File? = null
   var fragment: BaseReaderFragment? = null
+  var passphrase: String? = null
   var isViewInitialized: Boolean = false
   var lateInitSettings: Map<String, Any>? = null
 

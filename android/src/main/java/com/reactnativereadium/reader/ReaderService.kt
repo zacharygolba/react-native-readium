@@ -9,19 +9,29 @@ import java.io.File
 import java.io.IOException
 import java.net.ServerSocket
 import java.net.URL
+import org.readium.r2.lcp.LcpService
+import org.readium.r2.lcp.auth.LcpDialogAuthentication
+import org.readium.r2.lcp.auth.LcpPassphraseAuthentication
+import org.readium.r2.shared.Injectable
 import org.readium.r2.shared.extensions.mediaType
 import org.readium.r2.shared.extensions.tryOrNull
-import org.readium.r2.shared.Injectable
 import org.readium.r2.shared.publication.Locator
-import org.readium.r2.shared.publication.asset.FileAsset
 import org.readium.r2.shared.publication.Publication
-import org.readium.r2.streamer.server.Server
+import org.readium.r2.shared.publication.asset.FileAsset
+import org.readium.r2.shared.util.Try
 import org.readium.r2.streamer.Streamer
-
+import org.readium.r2.streamer.server.Server
 
 class ReaderService(
-  private val reactContext: ReactApplicationContext
+    private val reactContext: ReactApplicationContext,
 ) {
+  /**
+   * The LCP service decrypts LCP-protected publication and acquire publications from a license
+   * file.
+   */
+  private val lcpService =
+      LcpService(reactContext)?.let { Try.success(it) }
+          ?: Try.failure(Exception("liblcp is missing on the classpath"))
   private var streamer = Streamer(reactContext)
   // see R2App.onCreate
   private var server: Server
@@ -48,8 +58,8 @@ class ReaderService(
   }
 
   fun locatorFromLinkOrLocator(
-    location: LinkOrLocator?,
-    publication: Publication,
+      location: LinkOrLocator?,
+      publication: Publication,
   ): Locator? {
 
     if (location == null) return null
@@ -67,41 +77,50 @@ class ReaderService(
   }
 
   suspend fun openPublication(
-    fileName: String,
-    initialLocation: LinkOrLocator?,
-    callback: suspend (fragment: BaseReaderFragment) -> Unit
+      fileName: String,
+      initialLocation: LinkOrLocator?,
+      callback: suspend (fragment: BaseReaderFragment) -> Unit
   ) {
     val file = File(fileName)
     val asset = FileAsset(file, file.mediaType())
 
-    streamer.open(
-      asset,
-      allowUserInteraction = false,
-      sender = reactContext
-    )
-      .onSuccess {
-        val url = prepareToServe(it)
-        if (url != null) {
-          val locator = locatorFromLinkOrLocator(initialLocation, it)
-          val readerFragment = EpubReaderFragment.newInstance(url)
-          readerFragment.initFactory(it, locator)
-          callback.invoke(readerFragment)
+    streamer
+        .open(asset, allowUserInteraction = true, sender = reactContext)
+        .onSuccess {
+          val url = prepareToServe(it)
+          if (url != null) {
+            val locator = locatorFromLinkOrLocator(initialLocation, it)
+            val readerFragment = EpubReaderFragment.newInstance(url)
+            readerFragment.initFactory(it, locator)
+            callback.invoke(readerFragment)
+          }
         }
-      }
-      .onFailure {
-        tryOrNull { asset.file.delete() }
-        RNLog.w(reactContext, "Error executing ReaderService.openPublication")
-        // TODO: implement failure event
-      }
+        .onFailure {
+          tryOrNull { asset.file.delete() }
+          RNLog.w(reactContext, "Error executing ReaderService.openPublication")
+          // TODO: implement failure event
+        }
+  }
+
+  fun updatePassphrase(passphrase: String?): Unit {
+    streamer = Streamer(
+      reactContext,
+      contentProtections =
+        listOfNotNull(
+          lcpService
+            .getOrNull()
+            ?.contentProtection(
+              if (passphrase == null) LcpDialogAuthentication()
+              else LcpPassphraseAuthentication(passphrase)
+            )
+        ),
+    )
   }
 
   private fun prepareToServe(publication: Publication): URL? {
     val userProperties =
-      reactContext.filesDir.path + "/" + Injectable.Style.rawValue + "/UserProperties.json"
-    return server.addPublication(
-      publication,
-      userPropertiesFile = File(userProperties)
-    )
+        reactContext.filesDir.path + "/" + Injectable.Style.rawValue + "/UserProperties.json"
+    return server.addPublication(publication, userPropertiesFile = File(userProperties))
   }
 
   private fun startServer() {
